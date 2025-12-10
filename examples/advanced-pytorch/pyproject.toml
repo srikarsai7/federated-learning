@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Federated Learning with PyTorch and Flower (Advanced Example)"
 license = "Apache-2.0"
 dependencies = [
-    "flwr[simulation]>=1.23.0",
+    "flwr[simulation]>=1.24.0",
     "flwr-datasets[vision]>=0.5.0",
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -22,8 +22,8 @@ packages = ["."]
 publisher = "flwrlabs"
 
 [tool.flwr.app.components]
-serverapp = "pytorch_example.server_app:app"
-clientapp = "pytorch_example.client_app:app"
+serverapp = "pytorch_example.server_app_secagg:app"
+clientapp = "pytorch_example.client_app_secagg:app"
 
 [tool.flwr.app.config]
 num-server-rounds = 20
@@ -31,6 +31,11 @@ fraction-train = 0.25
 fraction-evaluate = 0.5
 local-epochs = 2
 server-device = "cpu"
+learning-rate = 0.01
+num-shares = 3
+reconstruction-threshold = 2
+max-weight = 9000
+timeout = 15.0
 
 [tool.flwr.federations]
 default = "local-sim"

@@ -52,23 +52,37 @@ class Net(nn.Module):
 
 def train(net, trainloader, epochs, lr, device):
     """Train the model on the training set."""
-    net.to(device)  # move model to GPU if available
+    net.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
+
+    # Adam usually converges better/faster than SGD here
+    optimizer = torch.optim.Adam(
+        net.parameters(),
+        lr=lr,
+        weight_decay=1e-4,  # small L2 for generalization
+    )
+
     net.train()
     running_loss = 0.0
+    total_batches = 0
+
     for _ in range(epochs):
         for batch in trainloader:
-            images = batch["image"]
-            labels = batch["label"]
+            images = batch["image"].to(device)
+            labels = batch["label"].to(device)
+
             optimizer.zero_grad()
-            loss = criterion(net(images.to(device)), labels.to(device))
+            outputs = net(images)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
 
-    avg_trainloss = running_loss / len(trainloader)
+            running_loss += loss.item()
+            total_batches += 1
+
+    avg_trainloss = running_loss / max(total_batches, 1)
     return avg_trainloss
+
 
 
 def test(net, testloader, device):
