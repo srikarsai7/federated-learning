@@ -39,7 +39,7 @@ def main(grid: Grid, context: Context) -> None:
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
-        train_config=ConfigRecord({"lr": 0.1}),
+        train_config=ConfigRecord({"lr": 0.01}),
         num_rounds=num_rounds,
         evaluate_fn=get_global_evaluate_fn(device=device),
     )

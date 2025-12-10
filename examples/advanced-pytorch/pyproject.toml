@@ -26,10 +26,10 @@ serverapp = "pytorch_example.server_app:app"
 clientapp = "pytorch_example.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
+num-server-rounds = 20
 fraction-train = 0.25
 fraction-evaluate = 0.5
-local-epochs = 1
+local-epochs = 2
 server-device = "cpu"
 
 [tool.flwr.federations]
