@@ -26,9 +26,6 @@ from pytorch_example.task import (
 )
 
 
-# --------------------------
-# Metric Aggregator
-# --------------------------
 def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
     """Weighted average of client metrics (by number of samples)."""
     if not metrics:
@@ -38,9 +35,6 @@ def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
     return {"accuracy": float(acc)}
 
 
-# --------------------------
-# FedAvg subclass with server-side eval each round
-# --------------------------
 class LoggingFedAvg(FedAvg):
     """FedAvg that additionally runs centralized evaluation every round.
 
@@ -91,9 +85,6 @@ class LoggingFedAvg(FedAvg):
         return aggregated_parameters, aggregated_metrics
 
 
-# --------------------------
-# Server App
-# --------------------------
 app = ServerApp()
 
 
@@ -101,7 +92,6 @@ app = ServerApp()
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for SecAgg+ server app with per-round logging."""
 
-    # ----------------- Read config -----------------
     cfg = context.run_config
     num_rounds = cfg["num-server-rounds"]
     fraction_train = cfg["fraction-train"]
@@ -113,23 +103,22 @@ def main(grid: Grid, context: Context) -> None:
     reconstruction_threshold = cfg["reconstruction-threshold"]
     max_weight = cfg["max-weight"]
 
-    # ----------------- Output directory -----------------
     save_path, run_dir = create_run_dir(config=cfg)
     print(f"Saving SecAgg+ run outputs under: {save_path} (run: {run_dir})")
 
-    # ----------------- Central test loader (reuse everywhere) -----------------
+    # Central test loader (reuse everywhere)
     global_test_set = load_dataset("zalando-datasets/fashion_mnist")["test"]
     central_testloader = DataLoader(
         global_test_set.with_transform(apply_eval_transforms),
         batch_size=32,
     )
 
-    # ----------------- Model & Initial Parameters -----------------
+    # Model & Initial Parameters
     net = Net()
     ndarrays = [p.detach().cpu().numpy() for _, p in net.state_dict().items()]
     parameters = ndarrays_to_parameters(ndarrays)
 
-    # ----------------- Strategy (our LoggingFedAvg) -----------------
+    # Strategy (our LoggingFedAvg)
     strategy = LoggingFedAvg(
         fraction_fit=fraction_train,
         fraction_evaluate=fraction_eval,
@@ -149,7 +138,7 @@ def main(grid: Grid, context: Context) -> None:
         strategy=strategy,
     )
 
-    # ----------------- SecAgg+ Workflow -----------------
+    # SecAgg+ Workflow
     fit_workflow = SecAggPlusWorkflow(
         num_shares=num_shares,
         reconstruction_threshold=reconstruction_threshold,
@@ -158,10 +147,8 @@ def main(grid: Grid, context: Context) -> None:
 
     workflow = DefaultWorkflow(fit_workflow=fit_workflow)
 
-    # ----------------- Run Training -----------------
     workflow(grid, legacy_ctx)
 
-    # ----------------- Final Global Parameters -----------------
     final_ndarrays = legacy_ctx.state[MAIN_PARAMS_RECORD].to_numpy_ndarrays()
     final_net = Net()
     state_dict = final_net.state_dict()
@@ -170,7 +157,6 @@ def main(grid: Grid, context: Context) -> None:
         state_dict[k] = torch.tensor(arr)
     final_net.load_state_dict(state_dict)
 
-    # ----------------- Final Global Evaluation -----------------
     final_loss, final_acc = test(final_net, central_testloader, device=device)
 
     results = {
@@ -186,16 +172,10 @@ def main(grid: Grid, context: Context) -> None:
         json.dump(results, f, indent=2)
     print(f"Wrote final metrics to {results_path}")
 
-    # ==========================================================================
-    #                           PER-ROUND METRIC LOGGING
-    # ==========================================================================
 
     history = legacy_ctx.history
     round_logs: List[Dict] = []
 
-    # History structure in Flower ≥1.24:
-    #   history.losses_distributed  -> List[(round, loss)]
-    #   history.metrics_distributed -> Dict[str, List[(round, value)]]
     losses = history.losses_distributed
     rounds = len(losses)
 
@@ -209,7 +189,7 @@ def main(grid: Grid, context: Context) -> None:
     }
 
     for idx in range(rounds):
-        rnd, loss = losses[idx]  # rnd is the round number Flower recorded
+        rnd, loss = losses[idx]
         rnd = int(rnd)
 
         entry: Dict = {
@@ -217,14 +197,12 @@ def main(grid: Grid, context: Context) -> None:
             "train_metrics": {"train_loss": float(loss)},
         }
 
-        # ----------------- Client-Side Eval (metrics_distributed["accuracy"]) -----------------
         client_acc = acc_by_round.get(rnd)
         if client_acc is not None:
             entry["evaluate_metrics_clientapp"] = {"accuracy": client_acc}
         else:
             entry["evaluate_metrics_clientapp"] = None
 
-        # ----------------- Server-Side Centralized Eval (from LoggingFedAvg) -----------------
         srv = server_metrics_by_round.get(rnd)
         if srv is not None:
             entry["evaluate_metrics_serverapp"] = {
